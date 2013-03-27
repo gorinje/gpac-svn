@@ -36,11 +36,11 @@ typedef struct __mse_module
 static Bool MSE_CanHandleURL(GF_InputService *plug, const char *url)
 {
     if (!plug || !url)
-      return 0;
+      return GF_FALSE;
     if (!strncmp(url, "blob:", 5)) {
-        return 1;
+        return GF_TRUE;
     } else {
-        return 0;
+        return GF_FALSE;
     }
 }
 
@@ -301,8 +301,8 @@ static Bool MSE_CanHandleURLInService(GF_InputService *plug, const char *url)
 {
     GF_MSE_In *msein = (GF_MSE_In*) plug->priv;
     GF_LOG(GF_LOG_DEBUG, GF_LOG_DASH, ("[MSE_IN] Received Can Handle URL In Service (%p) request from terminal for %s\n", msein->mediasource->service, url));
-    if (!plug || !plug->priv) return GF_SERVICE_ERROR;
-    return 1;
+    if (!plug || !plug->priv) return GF_FALSE;
+    return GF_TRUE;
 }
 
 GF_EXPORT
