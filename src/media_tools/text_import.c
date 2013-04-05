@@ -388,13 +388,13 @@ static GF_Err gf_text_import_srt(GF_MediaImporter *import)
 	end = prev_end = 0;
 	curLine = 0;
 	txt_line = 0;
-	set_start_char = set_end_char = 0;
+	set_start_char = set_end_char = GF_FALSE;
 	char_len = 0;
 	start = 0;
 	nb_samp = 0;
 	samp = gf_isom_new_text_sample();
 
-	first_samp = 1;
+	first_samp = GF_TRUE;
 	while (1) {
 		char *sOK = gf_text_get_utf8_line(szLine, 2048, srt_in, unicode_type);
 
@@ -427,7 +427,7 @@ static GF_Err gf_text_import_srt(GF_MediaImporter *import)
 				}
 				txt_line = 0;
 				char_len = 0;
-				set_start_char = set_end_char = 0;
+				set_start_char = set_end_char = GF_FALSE;
 				rec.startCharOffset = rec.endCharOffset = 0;
 				gf_isom_text_reset(samp);
 
@@ -484,7 +484,7 @@ static GF_Err gf_text_import_srt(GF_MediaImporter *import)
 
 		default:
 			/*reset only when text is present*/
-			first_samp = 0;
+			first_samp = GF_FALSE;
 
 			/*go to line*/
 			if (txt_line) {
@@ -508,7 +508,7 @@ static GF_Err gf_text_import_srt(GF_MediaImporter *import)
 					if (set_end_char) {
 						assert(set_start_char);
 						gf_isom_text_add_style(samp, &rec);
-						set_end_char = set_start_char = 0;
+						set_end_char = set_start_char = GF_FALSE;
 						rec.style_flags &= ~rem_styles;
 						rem_styles = 0;
 					}
@@ -519,17 +519,17 @@ static GF_Err gf_text_import_srt(GF_MediaImporter *import)
 					switch (uniLine[i+1]) {
 					case 'b': case 'B': 
 						rec.style_flags |= GF_TXT_STYLE_BOLD; 
-						set_start_char = 1;
+						set_start_char = GF_TRUE;
 						rec.startCharOffset = char_len + j;
 						break;
 					case 'i': case 'I': 
 						rec.style_flags |= GF_TXT_STYLE_ITALIC; 
-						set_start_char = 1;
+						set_start_char = GF_TRUE;
 						rec.startCharOffset = char_len + j;
 						break;
 					case 'u': case 'U': 
 						rec.style_flags |= GF_TXT_STYLE_UNDERLINED; 
-						set_start_char = 1;
+						set_start_char = GF_TRUE;
 						rec.startCharOffset = char_len + j;
 						break;
 					}
@@ -542,17 +542,17 @@ static GF_Err gf_text_import_srt(GF_MediaImporter *import)
 					switch (uniLine[i+2]) {
 					case 'b': case 'B': 
 						rem_styles |= GF_TXT_STYLE_BOLD; 
-						set_end_char = 1;
+						set_end_char = GF_TRUE;
 						rec.endCharOffset = char_len + j;
 						break;
 					case 'i': case 'I': 
 						rem_styles |= GF_TXT_STYLE_ITALIC; 
-						set_end_char = 1;
+						set_end_char = GF_TRUE;
 						rec.endCharOffset = char_len + j;
 						break;
 					case 'u': case 'U': 
 						rem_styles |= GF_TXT_STYLE_UNDERLINED; 
-						set_end_char = 1;
+						set_end_char = GF_TRUE;
 						rec.endCharOffset = char_len + j;
 						break;
 					}
@@ -562,8 +562,8 @@ static GF_Err gf_text_import_srt(GF_MediaImporter *import)
 				/*store style*/
 				if (set_end_char) {
 					gf_isom_text_add_style(samp, &rec);
-					set_end_char = 0;
-					set_start_char = 1;
+					set_end_char = GF_FALSE;
+					set_start_char = GF_TRUE;
 					rec.startCharOffset = char_len + j;
 					rec.style_flags &= ~rem_styles;
 					rem_styles = 0;
@@ -576,8 +576,8 @@ static GF_Err gf_text_import_srt(GF_MediaImporter *import)
 			/*store last style*/
 			if (set_end_char) {
 				gf_isom_text_add_style(samp, &rec);
-				set_end_char = 0;
-				set_start_char = 1;
+				set_end_char = GF_FALSE;
+				set_start_char = GF_TRUE;
 				rec.startCharOffset = char_len + j;
 				rec.style_flags &= ~rem_styles;
 				rem_styles = 0;
@@ -652,7 +652,7 @@ static GF_Err gf_text_import_webvtt(GF_MediaImporter *import)
     char                        *content_encoding = NULL;
     char                        *xml_schema_loc = NULL;
     char                        *mime_ns = "text/vtt";
-    Bool                        is_xml = 0;
+    Bool                        is_xml = GF_FALSE;
 
 	vtt_in = gf_f64_open(import->in_name, "rt");
 	gf_f64_seek(vtt_in, 0, SEEK_END);
@@ -748,7 +748,7 @@ static GF_Err gf_text_import_webvtt(GF_MediaImporter *import)
     gf_isom_generic_subtitle_sample_add_text(samp, "\n", 1);
 	txt_line ++;
 
-	first_samp = 1;
+	first_samp = GF_TRUE;
 	while (1) {
 		sOK = gf_text_get_utf8_line(szLine, 2048, vtt_in, unicode_type);
 		if (sOK) REM_TRAIL_MARKS(szLine, "\r\n\t ")
@@ -824,7 +824,7 @@ static GF_Err gf_text_import_webvtt(GF_MediaImporter *import)
 
 		default: /*state = 2 */
 			/*reset only when text is present*/
-			first_samp = 0;
+			first_samp = GF_FALSE;
 
 			ptr = (char *) szLine;
 			len = gf_utf8_mbstowcs(uniLine, 5000, (const char **) &ptr);
@@ -989,7 +989,7 @@ static GF_Err gf_text_import_sub(GF_MediaImporter *import)
 	start = end = prev_end = 0;
 
 	line = 0;
-	first_samp = 1;
+	first_samp = GF_TRUE;
 	while (1) {
 		char *sOK = gf_text_get_utf8_line(szLine, 2048, sub_in, unicode_type);
 		if (!sOK) break;
@@ -1036,7 +1036,7 @@ static GF_Err gf_text_import_sub(GF_MediaImporter *import)
 			s->IsRAP = 1;
 			gf_isom_add_sample(import->dest, track, 1, s);
 			gf_isom_sample_del(&s);
-			first_samp = 0;
+			first_samp = GF_FALSE;
 			nb_samp++;
 		}
 
@@ -1244,7 +1244,7 @@ static GF_Err gf_text_import_ttxt(GF_MediaImporter *import)
 
 	gf_import_message(import, GF_OK, "Timed Text (GPAC TTXT) Import");
 
-	last_sample_empty = 0;
+	last_sample_empty = GF_FALSE;
 	last_sample_duration = 0;
 	nb_descs = 0;
 	nb_samples = 0;
@@ -1371,7 +1371,7 @@ static GF_Err gf_text_import_ttxt(GF_MediaImporter *import)
 			GF_ISOSample *s;
 			GF_TextSample * samp;
 			u32 ts, descIndex;
-			Bool has_text = 0;
+			Bool has_text = GF_FALSE;
 			if (!nb_descs) {
 				e = gf_import_message(import, GF_BAD_PARAM, "Invalid Timed Text file - text stream header not found or empty");
 				goto exit;
@@ -1379,7 +1379,7 @@ static GF_Err gf_text_import_ttxt(GF_MediaImporter *import)
 			samp = gf_isom_new_text_sample();
 			ts = 0;
 			descIndex = 1;
-			last_sample_empty = 0;
+			last_sample_empty = GF_FALSE;
 
 			j=0;
 			while ( (att=(GF_XMLAttribute*)gf_list_enum(node->attributes, &j))) {
@@ -1394,11 +1394,11 @@ static GF_Err gf_text_import_ttxt(GF_MediaImporter *import)
 				else if (!strcmp(att->name, "sampleDescriptionIndex")) descIndex = atoi(att->value);
 				else if (!strcmp(att->name, "text")) {
 					u32 len;
-					char *str = ttxt_parse_string(import, att->value, 1);
+					char *str = ttxt_parse_string(import, att->value, GF_TRUE);
 					len = strlen(str);
 					gf_isom_text_add_text(samp, str, len);
-					last_sample_empty = len ? 0 : 1;
-					has_text = 1;
+					last_sample_empty = len ? GF_FALSE : GF_TRUE;
+					has_text = GF_TRUE;
 				}
 				else if (!strcmp(att->name, "scrollDelay")) gf_isom_text_set_scroll_delay(samp, (u32) (1000*atoi(att->value)));
 				else if (!strcmp(att->name, "highlightColor")) gf_isom_text_set_highlight_color_argb(samp, ttxt_get_color(import, att->value));
@@ -1410,11 +1410,11 @@ static GF_Err gf_text_import_ttxt(GF_MediaImporter *import)
 			while ( (ext=(GF_XMLNode*)gf_list_enum(node->content, &j))) {
 				if (!has_text && (ext->type==GF_XML_TEXT_TYPE)) {
 					u32 len;
-					char *str = ttxt_parse_string(import, ext->name, 0);
+					char *str = ttxt_parse_string(import, ext->name, GF_FALSE);
 					len = strlen(str);
 					gf_isom_text_add_text(samp, str, len);
-					last_sample_empty = len ? 0 : 1;
-					has_text = 1;
+					last_sample_empty = len ? GF_FALSE : GF_TRUE;
+					has_text = GF_TRUE;
 				}
 				if (ext->type) continue;
 
@@ -1670,16 +1670,16 @@ static GF_Err gf_text_import_texml(GF_MediaImporter *import)
 		if (node->type) continue;
 		if (strcmp(node->name, "sample")) continue;
 
-		isRAP = 0;
+		isRAP = GF_FALSE;
 		duration = 1000;
 		j=0;
 		while ((att=(GF_XMLAttribute *)gf_list_enum(node->attributes, &j))) {
 			if (!strcmp(att->name, "duration")) duration = atoi(att->value);
-			else if (!strcmp(att->name, "keyframe")) isRAP = !stricmp(att->value, "true");
+			else if (!strcmp(att->name, "keyframe")) isRAP = (!stricmp(att->value, "true") ? GF_TRUE : GF_FALSE);
 		}
 		nb_styles = 0;
 		nb_marks = 0;
-		same_style = same_box = 0;
+		same_style = same_box = GF_FALSE;
 		descIndex = 1;
 		j=0;
 		while ((desc=(GF_XMLNode*)gf_list_enum(node->content, &j))) {
@@ -1707,12 +1707,12 @@ static GF_Err gf_text_import_texml(GF_MediaImporter *import)
 					}
 					else if (!strcmp(att->name, "backgroundColor")) td.back_color = tx3g_get_color(import, att->value);
 					else if (!strcmp(att->name, "displayFlags")) {
-						Bool rev_scroll = 0;
+						Bool rev_scroll = GF_FALSE;
 						if (strstr(att->value, "scroll")) {
 							u32 scroll_mode = 0;
 							if (strstr(att->value, "scrollIn")) td.displayFlags |= GF_TXT_SCROLL_IN;
 							if (strstr(att->value, "scrollOut")) td.displayFlags |= GF_TXT_SCROLL_OUT;
-							if (strstr(att->value, "reverse")) rev_scroll = 1;
+							if (strstr(att->value, "reverse")) rev_scroll = GF_TRUE;
 							if (strstr(att->value, "horizontal")) scroll_mode = rev_scroll ? GF_TXT_SCROLL_RIGHT : GF_TXT_SCROLL_MARQUEE;
 							else scroll_mode = (rev_scroll ? GF_TXT_SCROLL_DOWN : GF_TXT_SCROLL_CREDITS);
 							td.displayFlags |= (scroll_mode<<7) & GF_TXT_SCROLL_DIRECTION;
@@ -1805,7 +1805,7 @@ static GF_Err gf_text_import_texml(GF_MediaImporter *import)
 				gf_isom_text_has_similar_description(import->dest, track, &td, &descIndex, &same_box, &same_style);
 				if (!descIndex) {
 					gf_isom_new_text_description(import->dest, track, &td, NULL, NULL, &descIndex);
-					same_style = same_box = 1;
+					same_style = same_box = GF_TRUE;
 				}
 
 				for (k=0; k<td.font_count; k++) gf_free(td.fonts[k].fontName);
