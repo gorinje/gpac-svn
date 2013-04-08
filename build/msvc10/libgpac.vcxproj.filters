@@ -1160,5 +1160,8 @@
     <ClCompile Include="..\..\src\utils\zutil.c">
       <Filter>utils</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\isomedia\webvtt.c">
+      <Filter>isomedia</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

@@ -1683,6 +1683,50 @@ GF_GenericSubtitleSample *gf_isom_new_generic_subtitle_sample();
 /*destroy generic subtitle sample handle*/
 void gf_isom_delete_generic_subtitle_sample(GF_GenericSubtitleSample *generic_subtitle_samp);
 
+/* WebVTT types */
+
+
+typedef enum {
+    WEBVTT_ID,
+    WEBVTT_SETTINGS,
+    WEBVTT_PAYLOAD,
+    WEBVTT_TIME
+} GF_WebVTTCuePropertyType;
+
+typedef struct _webvtt_timestamp {
+    u32 hour, min, sec, ms;
+} GF_WebVTTTimestamp;
+
+typedef struct _webvtt_cue
+{
+    GF_WebVTTTimestamp start;
+    GF_WebVTTTimestamp end;
+    char *id;
+    char *settings;
+    char *text;
+    char *time;
+
+    Bool split;
+    /* original times before split, if applicable */
+    GF_WebVTTTimestamp orig_start;
+    GF_WebVTTTimestamp orig_end;
+} GF_WebVTTCue;
+
+typedef struct _webvtt_sample
+{
+    u64 start;
+    u64 end;
+    GF_List *cues;
+} GF_WebVTTSample;
+
+GF_WebVTTSample *gf_isom_new_webvtt_sample();
+void gf_isom_delete_webvtt_sample(GF_WebVTTSample *samp);
+GF_WebVTTCue *gf_webvtt_cue_new();
+GF_Err gf_isom_webvtt_cue_add_property(GF_WebVTTCue *cue, GF_WebVTTCuePropertyType type, char *text_data, u32 text_len);
+GF_ISOSample *gf_isom_webvtt_to_sample(GF_WebVTTSample *samp);
+GF_Err gf_isom_webvtt_reset(GF_WebVTTSample *samp);
+GF_WebVTTCue *gf_webvtt_cue_split_at(GF_WebVTTCue *cue, GF_WebVTTTimestamp *time);
+
 #ifndef GPAC_DISABLE_ISOM_WRITE
 
 /*Create a new TextSampleDescription in the file. 
@@ -1749,6 +1793,11 @@ GF_Err gf_isom_text_set_wrap(GF_TextSample * samp, u8 wrap_flags);
 text sample content is kept untouched*/
 GF_ISOSample *gf_isom_text_to_sample(GF_TextSample * tx_samp);
 
+
+GF_Err gf_isom_generic_subtitle_reset(GF_GenericSubtitleSample *samp);
+GF_Err gf_isom_new_generic_subtitle_description(GF_ISOFile *movie, u32 trackNumber, char *content_encoding, char *xml_schema_loc, char*mime_type_or_namespace, Bool is_xml, char *URLname, char *URNname, u32 *outDescriptionIndex);
+GF_ISOSample *gf_isom_generic_subtitle_to_sample(GF_GenericSubtitleSample * tx_samp);
+GF_Err gf_isom_generic_subtitle_sample_add_text(GF_GenericSubtitleSample *samp, char *text_data, u32 text_len);
 
 GF_Err gf_isom_generic_subtitle_reset(GF_GenericSubtitleSample *samp);
 GF_Err gf_isom_new_generic_subtitle_description(GF_ISOFile *movie, u32 trackNumber, char *content_encoding, char *xml_schema_loc, char*mime_type_or_namespace, Bool is_xml, char *URLname, char *URNname, u32 *outDescriptionIndex);

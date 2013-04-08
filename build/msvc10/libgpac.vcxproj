@@ -242,6 +242,7 @@
     <ClCompile Include="..\..\src\isomedia\stbl_write.c" />
     <ClCompile Include="..\..\src\isomedia\track.c" />
     <ClCompile Include="..\..\src\isomedia\tx3g.c" />
+    <ClCompile Include="..\..\src\isomedia\webvtt.c" />
     <ClCompile Include="..\..\src\laser\lsr_dec.c" />
     <ClCompile Include="..\..\src\laser\lsr_enc.c" />
     <ClCompile Include="..\..\src\laser\lsr_tables.c" />
