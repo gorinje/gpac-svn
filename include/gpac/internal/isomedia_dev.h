@@ -357,12 +357,14 @@ enum
 
 	GF_ISOM_BOX_TYPE_RVCC	= GF_4CC( 'r', 'v', 'c', 'c' ),
 	
-	GF_ISOM_BOX_TYPE_VTTC	= GF_4CC( 'v', 't', 't', 'c' ),
+	GF_ISOM_BOX_TYPE_VTTC	= GF_4CC( 'v', 't', 't', 'C' ),
+	GF_ISOM_BOX_TYPE_VTCU	= GF_4CC( 'v', 't', 't', 'c' ),
 	GF_ISOM_BOX_TYPE_VTTE	= GF_4CC( 'v', 't', 't', 'e' ),
 	GF_ISOM_BOX_TYPE_CTIM	= GF_4CC( 'c', 't', 'i', 'm' ),
 	GF_ISOM_BOX_TYPE_IDEN	= GF_4CC( 'i', 'd', 'e', 'n' ),
 	GF_ISOM_BOX_TYPE_STTG	= GF_4CC( 's', 't', 't', 'g' ),
 	GF_ISOM_BOX_TYPE_PAYL	= GF_4CC( 'p', 'a', 'y', 'l' ),
+	GF_ISOM_BOX_TYPE_WVTT	= GF_4CC( 'w', 'v', 't', 't' ),
 
 	/*ALL INTERNAL BOXES - NEVER WRITTEN TO FILE!!*/
 
@@ -3387,6 +3389,81 @@ GF_Err tbox_Size(GF_Box *s);
 GF_Err blnk_Size(GF_Box *s);
 GF_Err twrp_Size(GF_Box *s);
 #endif
+
+/*WebVTT boxes*/
+GF_Box *boxstring_New(u32 type);
+GF_Box *vtcu_New();
+GF_Box *vtte_New();
+GF_Box *wvtt_New();
+
+void boxstring_del(GF_Box *s);
+void vtcu_del(GF_Box *s);
+void vtte_del(GF_Box *s);
+void wvtt_del(GF_Box *s);
+
+GF_Err boxstring_Read(GF_Box *s, GF_BitStream *bs);
+GF_Err vtcu_Read(GF_Box *s, GF_BitStream *bs);
+GF_Err vtte_Read(GF_Box *s, GF_BitStream *bs);
+GF_Err wvtt_Read(GF_Box *s, GF_BitStream *bs);
+
+#ifndef GPAC_DISABLE_ISOM_WRITE
+GF_Err boxstring_Write(GF_Box *s, GF_BitStream *bs);
+GF_Err vtcu_Write(GF_Box *s, GF_BitStream *bs);
+GF_Err vtte_Write(GF_Box *s, GF_BitStream *bs);
+GF_Err wvtt_Write(GF_Box *s, GF_BitStream *bs);
+
+GF_Err boxstring_Size(GF_Box *s);
+GF_Err vtcu_Size(GF_Box *s);
+GF_Err vtte_Size(GF_Box *s);
+GF_Err wvtt_Size(GF_Box *s);
+#endif
+
+GF_Err boxstring_dump(GF_Box *a, FILE * trace);
+GF_Err vtcu_dump(GF_Box *a, FILE * trace);
+GF_Err vtte_dump(GF_Box *a, FILE * trace);
+GF_Err wvtt_dump(GF_Box *a, FILE * trace);
+
+/* WebVTT types */
+typedef enum {
+    WEBVTT_ID,
+    WEBVTT_SETTINGS,
+    WEBVTT_PAYLOAD,
+    WEBVTT_TIME
+} GF_WebVTTCuePropertyType;
+
+typedef struct _webvtt_timestamp {
+    u32 hour, min, sec, ms;
+} GF_WebVTTTimestamp;
+
+typedef struct _webvtt_cue
+{
+    GF_WebVTTTimestamp start;
+    GF_WebVTTTimestamp end;
+    char *id;
+    char *settings;
+    char *text;
+    char *time;
+
+    Bool split;
+    /* original times before split, if applicable */
+    GF_WebVTTTimestamp orig_start;
+    GF_WebVTTTimestamp orig_end;
+} GF_WebVTTCue;
+
+typedef struct _webvtt_sample
+{
+    u64 start;
+    u64 end;
+    GF_List *cues;
+} GF_WebVTTSample;
+
+GF_WebVTTSample *gf_isom_new_webvtt_sample();
+void gf_isom_delete_webvtt_sample(GF_WebVTTSample *samp);
+GF_WebVTTCue *gf_webvtt_cue_new();
+GF_Err gf_isom_webvtt_cue_add_property(GF_WebVTTCue *cue, GF_WebVTTCuePropertyType type, char *text_data, u32 text_len);
+GF_ISOSample *gf_isom_webvtt_to_sample(GF_WebVTTSample *samp);
+GF_Err gf_isom_webvtt_reset(GF_WebVTTSample *samp);
+GF_WebVTTCue *gf_webvtt_cue_split_at(GF_WebVTTCue *cue, GF_WebVTTTimestamp *time);
 
 
 /* MPEG-21 functions */

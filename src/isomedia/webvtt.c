@@ -30,38 +30,271 @@
 
 typedef struct 
 {
+    GF_ISOM_BOX
     char *string;
 } GF_StringBox;
 
+typedef struct
+{
+    GF_ISOM_BOX
+    GF_StringBox *id;
+    GF_StringBox *time;
+    GF_StringBox *settings;
+    GF_StringBox *payload;
+} GF_VTTCueBox;
+
+typedef struct
+{
+    GF_ISOM_SAMPLE_ENTRY_FIELDS
+    GF_StringBox *config;
+} GF_WebVTTSampleEntryBox;
+
+GF_Box *boxstring_New(u32 type) {
+    ISOM_DECL_BOX_ALLOC(GF_StringBox, type);
+    return (GF_Box *)tmp;
+}
+
+static GF_Box *boxstring_new_with_data(u32 type, const char *string) {
+    ISOM_DECL_BOX_ALLOC(GF_StringBox, type);
+    if (string) tmp->string = gf_strdup(string);
+    return (GF_Box *)tmp;
+}
+
+GF_Box *vtcu_New() 
+{
+    ISOM_DECL_BOX_ALLOC(GF_VTTCueBox, GF_ISOM_BOX_TYPE_VTCU);
+    return (GF_Box *)tmp;
+}
+
+GF_Box *vtte_New() {
+    ISOM_DECL_BOX_ALLOC(GF_Box, GF_ISOM_BOX_TYPE_VTTE);
+    return (GF_Box *)tmp;
+}
+
+GF_Box *wvtt_New() 
+{
+    ISOM_DECL_BOX_ALLOC(GF_WebVTTSampleEntryBox, GF_ISOM_BOX_TYPE_WVTT);
+    return (GF_Box *)tmp;
+}
+
+void boxstring_del(GF_Box *s)
+{
+    GF_StringBox *box = (GF_StringBox *)s;
+    if (box->string) gf_free(box->string);
+    gf_free(box);
+}
+
+void vtcu_del(GF_Box *s) 
+{
+    GF_VTTCueBox *box = (GF_VTTCueBox *)s;
+    if (box->id) gf_isom_box_del((GF_Box *)box->id);
+    if (box->settings) gf_isom_box_del((GF_Box *)box->settings);
+    if (box->payload) gf_isom_box_del((GF_Box *)box->payload);
+}
+
+void vtte_del(GF_Box *s)
+{
+    gf_free(s);
+}
+
+void wvtt_del(GF_Box *s)
+{
+    GF_WebVTTSampleEntryBox *wvtt = (GF_WebVTTSampleEntryBox *)s;
+    if (wvtt->config) gf_isom_box_del((GF_Box *)wvtt->config);
+    gf_free(s);
+}
+
+GF_Err boxstring_Read(GF_Box *s, GF_BitStream *bs)
+{
+    GF_StringBox *box = (GF_StringBox *)s;
+    box->string = (char *)gf_malloc((u32)(s->size+1));
+    gf_bs_read_data(bs, box->string, (u32)(s->size));
+    box->string[(u32)(s->size)] = 0;
+    return GF_OK;
+}
+
+static GF_Err vtcu_Add(GF_Box *s, GF_Box *box)
+{
+    GF_VTTCueBox *cuebox = (GF_VTTCueBox *)s;
+    switch(box->type) {
+    case GF_ISOM_BOX_TYPE_CTIM: 
+        cuebox->time = (GF_StringBox *)box;
+        break;
+    case GF_ISOM_BOX_TYPE_IDEN: 
+        cuebox->id = (GF_StringBox *)box;
+        break;
+    case GF_ISOM_BOX_TYPE_STTG: 
+        cuebox->settings = (GF_StringBox *)box;
+        break;
+    case GF_ISOM_BOX_TYPE_PAYL: 
+        cuebox->payload = (GF_StringBox *)box;
+        break;
+    default:
+        return gf_isom_box_add_default(s, box);
+    }
+    return GF_OK;
+}
+
+GF_Err vtcu_Read(GF_Box *s, GF_BitStream *bs)
+{
+    GF_VTTCueBox *cuebox = (GF_VTTCueBox *)s;
+    return gf_isom_read_box_list(s, bs, vtcu_Add);
+}
+
+GF_Err vtte_Read(GF_Box *s, GF_BitStream *bs)
+{
+    return gf_isom_read_box_list(s, bs, gf_isom_box_add_default);
+}
+
+static GF_Err wvtt_Add(GF_Box *s, GF_Box *box)
+{
+    GF_WebVTTSampleEntryBox *wvtt = (GF_WebVTTSampleEntryBox *)s;
+    switch(box->type) {
+    case GF_ISOM_BOX_TYPE_VTTC: 
+        wvtt->config = (GF_StringBox *)box;
+        break;
+    default:
+        return gf_isom_box_add_default(s, box);
+    }
+    return GF_OK;
+}
+
+GF_Err wvtt_Read(GF_Box *s, GF_BitStream *bs)
+{
+    GF_WebVTTSampleEntryBox *wvtt = (GF_WebVTTSampleEntryBox *)s;
+    return gf_isom_read_box_list(s, bs, wvtt_Add);
+}
+
+#ifndef GPAC_DISABLE_ISOM_WRITE
+GF_Err boxstring_Write(GF_Box *s, GF_BitStream *bs)
+{
+    GF_Err e;
+    GF_StringBox *box = (GF_StringBox *)s;
+    e = gf_isom_box_write_header(s, bs);
+    if (e) return e;
+    if (box->string) {
+        gf_bs_write_data(bs, box->string, (u32)(box->size-8));
+    }
+    return e;
+}
+
+GF_Err vtcu_Write(GF_Box *s, GF_BitStream *bs)
+{
+    GF_Err e;
+    GF_VTTCueBox *cuebox = (GF_VTTCueBox *)s;
+    e = gf_isom_box_write_header(s, bs);
+    if (e) return e;
+    if (cuebox->id) {
+        e = gf_isom_box_write((GF_Box *)cuebox->id, bs);
+        if (e) return e;
+    }
+    if (cuebox->settings) {
+        e = gf_isom_box_write((GF_Box *)cuebox->settings, bs);
+        if (e) return e;
+    }
+    if (cuebox->payload) {
+        e = gf_isom_box_write((GF_Box *)cuebox->payload, bs);
+    }
+    return e;
+}
+
+GF_Err vtte_Write(GF_Box *s, GF_BitStream *bs)
+{
+    GF_Err e;
+    e = gf_isom_box_write_header(s, bs);
+    return e;
+}
+
+GF_Err wvtt_Write(GF_Box *s, GF_BitStream *bs)
+{
+    GF_Err e;
+    GF_WebVTTSampleEntryBox *wvtt = (GF_WebVTTSampleEntryBox *)s;
+    e = gf_isom_box_write_header(s, bs);
+    if (wvtt->config) gf_isom_box_write((GF_Box *)wvtt->config, bs);
+    return e;
+}
+
+GF_Err boxstring_Size(GF_Box *s)
+{
+    GF_Err e;
+    GF_StringBox *box = (GF_StringBox *)s;
+    e = gf_isom_box_get_size(s);
+    if (e) return e;
+    
+    box->size += strlen(box->string);
+    return GF_OK;
+}
+
+GF_Err vtcu_Size(GF_Box *s)
+{
+    GF_Err e;
+    GF_VTTCueBox *cuebox = (GF_VTTCueBox *)s;
+    e = gf_isom_box_get_size(s);
+    if (e) return e;
+    if (cuebox->id) {
+        e = gf_isom_box_size((GF_Box *)cuebox->id);
+        if (e) return e;
+        cuebox->size += cuebox->id->size;
+    }
+    if (cuebox->settings) {
+        e = gf_isom_box_size((GF_Box *)cuebox->settings);
+        if (e) return e;
+        cuebox->size += cuebox->settings->size;
+    }
+    if (cuebox->payload) {
+        e = gf_isom_box_size((GF_Box *)cuebox->payload);
+        if (e) return e;
+        cuebox->size += cuebox->payload->size;
+    }
+    return GF_OK;
+}
+
+GF_Err vtte_Size(GF_Box *s)
+{
+    return gf_isom_box_get_size(s);
+}
+
+GF_Err wvtt_Size(GF_Box *s)
+{
+    GF_Err e;
+    GF_WebVTTSampleEntryBox *wvtt = (GF_WebVTTSampleEntryBox *)s;
+    e = gf_isom_box_get_size(s);
+    if (e) return e;
+    if (wvtt->config) {
+        e = gf_isom_box_size((GF_Box *)wvtt->config);
+        if (e) return e;
+        wvtt->size += wvtt->config->size;
+    }
+    return e;
+}
+#endif
+
 #ifndef GPAC_DISABLE_ISOM_WRITE
 
-GF_Err gf_isom_update_webvtt_description(GF_ISOFile *movie, u32 trackNumber, u32 descriptionIndex, GF_TextSampleDescriptor *desc)
+GF_Err gf_isom_update_webvtt_description(GF_ISOFile *movie, u32 trackNumber, u32 descriptionIndex, const char *config)
 {
     GF_TrackBox *trak;
     GF_Err e;
-    u32 i;
-    GF_Tx3gSampleEntryBox *txt;
+    GF_WebVTTSampleEntryBox *wvtt;
 
-    if (!descriptionIndex || !desc) return GF_BAD_PARAM;
+    if (!descriptionIndex) return GF_BAD_PARAM;
     e = CanAccessMovie(movie, GF_ISOM_OPEN_WRITE);
     if (e) return e;
     
     trak = gf_isom_get_track_from_file(movie, trackNumber);
-    if (!trak || !trak->Media || !desc->font_count) return GF_BAD_PARAM;
+    if (!trak || !trak->Media) return GF_BAD_PARAM;
 
     switch (trak->Media->handler->handlerType) {
     case GF_ISOM_MEDIA_TEXT:
-    case GF_ISOM_MEDIA_SUBT:
         break;
     default:
         return GF_BAD_PARAM;
     }
 
-    txt = (GF_Tx3gSampleEntryBox*)gf_list_get(trak->Media->information->sampleTable->SampleDescription->other_boxes, descriptionIndex - 1);
-    if (!txt) return GF_BAD_PARAM;
-    switch (txt->type) {
-    case GF_ISOM_BOX_TYPE_TX3G:
-    case GF_ISOM_BOX_TYPE_TEXT:
+    wvtt = (GF_WebVTTSampleEntryBox*)gf_list_get(trak->Media->information->sampleTable->SampleDescription->other_boxes, descriptionIndex - 1);
+    if (!wvtt) return GF_BAD_PARAM;
+    switch (wvtt->type) {
+    case GF_ISOM_BOX_TYPE_WVTT:
         break;
     default:
         return GF_BAD_PARAM;
@@ -69,21 +302,7 @@ GF_Err gf_isom_update_webvtt_description(GF_ISOFile *movie, u32 trackNumber, u32
 
     trak->Media->mediaHeader->modificationTime = gf_isom_get_mp4time();
 
-    txt->back_color = desc->back_color; 
-    txt->default_box = desc->default_pos;
-    txt->default_style = desc->default_style;
-    txt->displayFlags = desc->displayFlags;
-    txt->vertical_justification = desc->vert_justif;
-    txt->horizontal_justification = desc->horiz_justif;
-    if (txt->font_table) gf_isom_box_del((GF_Box*)txt->font_table);
-
-    txt->font_table = (GF_FontTableBox *)gf_isom_box_new(GF_ISOM_BOX_TYPE_FTAB);
-    txt->font_table->entry_count = desc->font_count;
-    txt->font_table->fonts = (GF_FontRecord *) gf_malloc(sizeof(GF_FontRecord) * desc->font_count);
-    for (i=0; i<desc->font_count; i++) {
-        txt->font_table->fonts[i].fontID = desc->fonts[i].fontID;
-        if (desc->fonts[i].fontName) txt->font_table->fonts[i].fontName = gf_strdup(desc->fonts[i].fontName);
-    }
+    wvtt->config = (GF_StringBox *)boxstring_new_with_data(GF_ISOM_BOX_TYPE_VTTC, config);
     return e;
 }
 
@@ -91,18 +310,17 @@ GF_Err gf_isom_new_webvtt_description(GF_ISOFile *movie, u32 trackNumber, GF_Tex
 {
     GF_TrackBox *trak;
     GF_Err e;
-    u32 dataRefIndex, i;
-    GF_Tx3gSampleEntryBox *txt;
+    u32 dataRefIndex;
+    GF_WebVTTSampleEntryBox *wvtt;
 
     e = CanAccessMovie(movie, GF_ISOM_OPEN_WRITE);
     if (e) return e;
     
     trak = gf_isom_get_track_from_file(movie, trackNumber);
-    if (!trak || !trak->Media || !desc->font_count) return GF_BAD_PARAM;
+    if (!trak || !trak->Media) return GF_BAD_PARAM;
 
     switch (trak->Media->handler->handlerType) {
     case GF_ISOM_MEDIA_TEXT:
-    case GF_ISOM_MEDIA_SUBT:
         break;
     default:
         return GF_BAD_PARAM;
@@ -117,34 +335,34 @@ GF_Err gf_isom_new_webvtt_description(GF_ISOFile *movie, u32 trackNumber, GF_Tex
     }
     trak->Media->mediaHeader->modificationTime = gf_isom_get_mp4time();
 
-    txt = (GF_Tx3gSampleEntryBox *) gf_isom_box_new(GF_ISOM_BOX_TYPE_TX3G);
-    txt->dataReferenceIndex = dataRefIndex;
-    gf_list_add(trak->Media->information->sampleTable->SampleDescription->other_boxes, txt);
+    wvtt = (GF_WebVTTSampleEntryBox *) gf_isom_box_new(GF_ISOM_BOX_TYPE_WVTT);
+    wvtt->dataReferenceIndex = dataRefIndex;
+    gf_list_add(trak->Media->information->sampleTable->SampleDescription->other_boxes, wvtt);
     if (outDescriptionIndex) *outDescriptionIndex = gf_list_count(trak->Media->information->sampleTable->SampleDescription->other_boxes);
-
-    txt->back_color = desc->back_color; 
-    txt->default_box = desc->default_pos;
-    txt->default_style = desc->default_style;
-    txt->displayFlags = desc->displayFlags;
-    txt->vertical_justification = desc->vert_justif;
-    txt->horizontal_justification = desc->horiz_justif;
-    txt->font_table = (GF_FontTableBox *)gf_isom_box_new(GF_ISOM_BOX_TYPE_FTAB);
-    txt->font_table->entry_count = desc->font_count;
-
-    txt->font_table->fonts = (GF_FontRecord *) gf_malloc(sizeof(GF_FontRecord) * desc->font_count);
-    for (i=0; i<desc->font_count; i++) {
-        txt->font_table->fonts[i].fontID = desc->fonts[i].fontID;
-        if (desc->fonts[i].fontName) txt->font_table->fonts[i].fontName = gf_strdup(desc->fonts[i].fontName);
-    }
     return e;
 }
 
-static GFINLINE GF_Err webvtt_write_box(GF_BitStream *bs, GF_Box *a)
+static GFINLINE GF_Err webvtt_write_cue(GF_BitStream *bs, GF_WebVTTCue *cue)
 {
     GF_Err e;
-    if (!a) return GF_OK;
-    e = gf_isom_box_size(a);
-    if (!e) e = gf_isom_box_write(a, bs);
+    GF_VTTCueBox *cuebox;
+    if (!cue) return GF_OK;
+
+    cuebox = (GF_VTTCueBox *)vtcu_New(); 
+    if (cue->id) {
+        cuebox->id = (GF_StringBox *)boxstring_new_with_data(GF_ISOM_BOX_TYPE_IDEN, cue->id);
+    }
+    if (cue->settings) {
+        cuebox->settings = (GF_StringBox *)boxstring_new_with_data(GF_ISOM_BOX_TYPE_STTG, cue->settings);
+    }
+    if (cue->text) {
+        cuebox->payload = (GF_StringBox *)boxstring_new_with_data(GF_ISOM_BOX_TYPE_PAYL, cue->text);
+    }
+
+    e = gf_isom_box_size((GF_Box *)cuebox);
+    if (!e) e = gf_isom_box_write((GF_Box *)cuebox, bs);
+
+    gf_isom_box_del((GF_Box *)cuebox);
     return e;
 }
 
@@ -154,6 +372,84 @@ GF_WebVTTCue *gf_webvtt_cue_new()
     GF_SAFEALLOC(cue, GF_WebVTTCue);
     return cue;
 }
+
+GF_ISOSample *gf_isom_webvtt_to_sample(GF_WebVTTSample *samp)
+{
+    GF_Err e = GF_OK;
+    GF_ISOSample *res;
+    GF_BitStream *bs;
+    u32 i;
+    GF_WebVTTCue *cue;
+    if (!samp) return NULL;
+
+    bs = gf_bs_new(NULL, 0, GF_BITSTREAM_WRITE);
+
+    i=0;
+    while ((cue = (GF_WebVTTCue *)gf_list_enum(samp->cues, &i))) {
+        e = webvtt_write_cue(bs, cue);
+        if (e) break;
+    }
+    /* TODO: insert an VTTEmptyCueBox if not other cue box was added */
+    if (e) {
+        gf_bs_del(bs);
+        return NULL;
+    }
+    res = gf_isom_sample_new();
+    if (!res) {
+        gf_bs_del(bs);
+        return NULL;
+    }
+    gf_bs_get_content(bs, &res->data, &res->dataLength);
+    gf_bs_del(bs);
+    res->IsRAP = 1;
+    return res;
+}
+
+#endif /*GPAC_DISABLE_ISOM_WRITE*/
+
+#ifndef GPAC_DISABLE_ISOM_DUMP
+GF_Err DumpBox(GF_Box *a, FILE * trace);
+void gf_box_dump_done(char *name, GF_Box *ptr, FILE *trace);
+
+GF_Err boxstring_dump(GF_Box *a, FILE * trace)
+{
+    GF_StringBox *sbox = (GF_StringBox *)a;
+    fprintf(trace, "<StringBox string=\"%s\">\n", sbox->string);
+    DumpBox(a, trace);
+    gf_box_dump_done("StringBox", a, trace);
+    return GF_OK;
+}
+
+GF_Err vtcu_dump(GF_Box *a, FILE * trace)
+{
+    GF_VTTCueBox *cuebox = (GF_VTTCueBox *)a;
+    fprintf(trace, "<WebVTTCueBox>\n");
+    DumpBox(a, trace);
+    if (cuebox->id) boxstring_dump((GF_Box *)cuebox->id, trace);
+    if (cuebox->settings) boxstring_dump((GF_Box *)cuebox->settings, trace);
+    if (cuebox->payload) boxstring_dump((GF_Box *)cuebox->payload, trace);
+    gf_box_dump_done("WebVTTCueBox", a, trace);
+    return GF_OK;
+}
+
+GF_Err vtte_dump(GF_Box *a, FILE * trace) 
+{
+    fprintf(trace, "<WebVTTEmptyCueBox>\n");
+    DumpBox(a, trace);
+    gf_box_dump_done("WebVTTEmptyCueBox", a, trace);
+    return GF_OK;
+}
+
+GF_Err wvtt_dump(GF_Box *a, FILE * trace)
+{
+    GF_WebVTTSampleEntryBox *cuebox = (GF_WebVTTSampleEntryBox *)a;
+    fprintf(trace, "<WebVTTSampleEntryBox>\n");
+    DumpBox(a, trace);
+    if (cuebox->config) boxstring_dump((GF_Box *)cuebox->config, trace);
+    gf_box_dump_done("WebVTTSampleEntryBox", a, trace);
+    return GF_OK;
+}
+#endif
 
 /* mark the overlapped cue in the previous sample as split */
 /* duplicate the cue, mark it as split and adjust its timing */
@@ -211,40 +507,6 @@ GF_Err gf_isom_webvtt_cue_add_property(GF_WebVTTCue *cue, GF_WebVTTCuePropertyTy
     }
     return GF_OK;
 }
-
-GF_ISOSample *gf_isom_webvtt_to_sample(GF_WebVTTSample *samp)
-{
-    GF_Err e = GF_OK;
-    GF_ISOSample *res;
-    GF_BitStream *bs;
-    u32 i;
-    GF_Box *a;
-    if (!samp) return NULL;
-
-    bs = gf_bs_new(NULL, 0, GF_BITSTREAM_WRITE);
-
-    i=0;
-    //while ((a = (GF_Box*)gf_list_enum(samp->cues, &i))) {
-    //    e = webvtt_write_box(bs, a);
-    //    if (e) break;
-    //}
-    /* TODO: insert an VTTEmptyCueBox if not other cue box was added */
-    if (e) {
-        gf_bs_del(bs);
-        return NULL;
-    }
-    res = gf_isom_sample_new();
-    if (!res) {
-        gf_bs_del(bs);
-        return NULL;
-    }
-    gf_bs_get_content(bs, &res->data, &res->dataLength);
-    gf_bs_del(bs);
-    res->IsRAP = 1;
-    return res;
-}
-
-#endif /*GPAC_DISABLE_ISOM_WRITE*/
 
 GF_WebVTTSample *gf_isom_new_webvtt_sample()
 {
@@ -336,7 +598,7 @@ GF_WebVTTSample *gf_isom_parse_webvtt_sample(GF_BitStream *bs)
             case GF_ISOM_BOX_TYPE_VTTE:
                 /* empty cue */
                 break;
-            case GF_ISOM_BOX_TYPE_VTTC:
+            case GF_ISOM_BOX_TYPE_VTCU:
                 /* real cue */
                 cue = gf_isom_parse_webvtt_cue(bs);
                 gf_list_add(s->cues, cue);
@@ -431,12 +693,6 @@ GF_Err gf_isom_get_webvtt_esd(GF_MediaBox *mdia, GF_ESD **out_esd)
     gf_bs_get_content(bs, &esd->decoderConfig->decoderSpecificInfo->data, &esd->decoderConfig->decoderSpecificInfo->dataLength);
     gf_bs_del(bs);
     *out_esd = esd;
-    return GF_OK;
-}
-
-GF_Err gf_isom_rewrite_webvtt_sample(GF_ISOSample *samp, u32 sampleDescriptionIndex, u32 sample_dur)
-{
-
     return GF_OK;
 }
 

@@ -624,18 +624,14 @@ typedef struct {
     GF_WebVTTCue         *cue;
     GF_List              *samples;
 
-    //u64                  start;
-    //u64                  end;
-    //u64                  prev_start;
-    //u64                  prev_end;
-
     FILE                 *vtt_in;
     u64                  file_size;
     s32                  unicode_type;
 
     void *user;
     GF_Err (*report_message)(void *, GF_Err, char *, const char *);
-    void (*flush_sample)(void *, GF_WebVTTSample *);
+    void (*on_header_parsed)(void *, const char *);
+    void (*on_sample_parsed)(void *, GF_WebVTTSample *);
 
 } GF_WebVTTParser;
 
@@ -657,7 +653,8 @@ static void gf_webvtt_parser_reset(GF_WebVTTParser *parser)
 
 static GF_Err gf_webvtt_parser_init(GF_WebVTTParser *parser, const char *input_file, 
                                     void *user, GF_Err (*report_message)(void *, GF_Err, char *, const char *),
-                                    void (*flush_sample)(void *, GF_WebVTTSample *))
+                                    void (*on_sample_parsed)(void *, GF_WebVTTSample *),
+                                    void (*on_header_parsed)(void *, const char *))
 {
     if (parser) {
         gf_webvtt_parser_reset(parser);
@@ -675,7 +672,8 @@ static GF_Err gf_webvtt_parser_init(GF_WebVTTParser *parser, const char *input_f
 
         parser->user = user;
         parser->report_message = report_message;
-        parser->flush_sample = flush_sample;
+        parser->on_sample_parsed = on_sample_parsed;
+        parser->on_header_parsed = on_header_parsed;
         return GF_OK;
     }
     return GF_BAD_PARAM;
@@ -728,7 +726,7 @@ static void gf_webvtt_add_cue_to_samples(GF_WebVTTParser *parser, GF_List *sampl
         {
             sample_end = sample->end;
             gf_list_del_item(samples, sample);
-            parser->flush_sample(parser->user, sample);
+            parser->on_sample_parsed(parser->user, sample);
             i--;
             sample = NULL;
         }
@@ -751,7 +749,7 @@ static void gf_webvtt_add_cue_to_samples(GF_WebVTTParser *parser, GF_List *sampl
                 /* adjust the end of the sample and flush it */
                 sample->end = cue_start;
                 gf_list_del_item(samples, sample);
-                parser->flush_sample(parser->user, sample);
+                parser->on_sample_parsed(parser->user, sample);
                 sample = NULL;
             }
             /* check the new sample */
@@ -788,7 +786,7 @@ static void gf_webvtt_add_cue_to_samples(GF_WebVTTParser *parser, GF_List *sampl
         GF_WebVTTSample *empty_sample = gf_isom_new_webvtt_sample();
         empty_sample->start = sample_end;
         empty_sample->end   = cue_start;
-        parser->flush_sample(parser->user, empty_sample);
+        parser->on_sample_parsed(parser->user, empty_sample);
     }
     sample = gf_isom_new_webvtt_sample();
     gf_list_add(samples, sample);
@@ -817,6 +815,7 @@ static GF_Err gf_webvtt_parser_parse(GF_WebVTTParser *parser, u32 duration)
                 parser->report_message(parser->user, e, "Bad WebVTT formatting - expecting WEBVTT file signature %s", szLine);
                 goto exit;
             } else {
+                parser->on_header_parsed(parser->user, szLine);
                 parser->state = WEBVTT_PARSER_STATE_WAITING_CUE;
                 break;
             }
@@ -899,7 +898,7 @@ static GF_Err gf_webvtt_parser_parse(GF_WebVTTParser *parser, u32 duration)
     while (gf_list_count(parser->samples) > 0) {
         GF_WebVTTSample *sample = (GF_WebVTTSample *)gf_list_get(parser->samples, 0);
         gf_list_rem(parser->samples, 0);
-        parser->flush_sample(parser->user, sample);
+        parser->on_sample_parsed(parser->user, sample);
     }
     gf_set_progress("Importing WebVTT", parser->file_size, parser->file_size);
     e = GF_OK;
@@ -912,12 +911,19 @@ typedef struct {
     GF_MediaImporter *import;
     u32 timescale;
     u32 track;
+    u32 descriptionIndex;
 } GF_WebVTTISOFlusher;
 
 static GF_Err gf_webvtt_import_report(void *user, GF_Err e, char *message, const char *line)
 {
     GF_WebVTTISOFlusher     *flusher = (GF_WebVTTISOFlusher *)user;
     return gf_import_message(flusher->import, e, message, line);
+}
+
+static void gf_webvtt_import_header(void *user, const char *config)
+{
+    GF_WebVTTISOFlusher     *flusher = (GF_WebVTTISOFlusher *)user;
+    gf_isom_update_webvtt_description(flusher->import->dest, flusher->track, flusher->descriptionIndex, config);
 }
 
 static void gf_webvtt_flush_sample_to_iso(void *user, GF_WebVTTSample *samp)
@@ -946,102 +952,99 @@ static void gf_webvtt_flush_sample_to_iso(void *user, GF_WebVTTSample *samp)
 
 static GF_Err gf_text_import_webvtt(GF_MediaImporter *import)
 {
-    GF_Err                      e;
-    u32                         track;
-    u32                         timescale;
-    u32                         duration;
-    u32                         ID;
-    u32                         OCR_ES_ID;
-    GF_GenericSubtitleConfig    *cfg;
-    char                        *content_encoding = NULL;
-    char                        *xml_schema_loc = NULL;
-    char                        *mime_ns = "text/vtt";
-    Bool                        is_xml = GF_FALSE;
-    GF_WebVTTParser             *vttparser;
-    GF_WebVTTISOFlusher         flusher;
+	GF_Err						e;
+	u32							track;
+	u32							timescale;
+	u32							duration;
+	u32							descIndex;
+	u32							ID;
+	u32							OCR_ES_ID;
+	GF_GenericSubtitleConfig	*cfg;
+	GF_WebVTTParser				*vttparser;
+	GF_WebVTTISOFlusher			flusher;
 
-	cfg = NULL;
+	cfg	= NULL;
 	if (import->esd) {
-		if (!import->esd->slConfig) {
-			import->esd->slConfig = (GF_SLConfig *) gf_odf_desc_new(GF_ODF_SLC_TAG);
-			import->esd->slConfig->predefined = 2;
+		if (!import->esd->slConfig)	{
+			import->esd->slConfig =	(GF_SLConfig *)	gf_odf_desc_new(GF_ODF_SLC_TAG);
+			import->esd->slConfig->predefined =	2;
 			import->esd->slConfig->timestampResolution = 1000;
 		}
-		timescale = import->esd->slConfig->timestampResolution;
-		if (!timescale) timescale = 1000;
+		timescale =	import->esd->slConfig->timestampResolution;
+		if (!timescale)	timescale =	1000;
 
-		/*explicit text config*/
+		/*explicit text	config*/
 		if (import->esd->decoderConfig && import->esd->decoderConfig->decoderSpecificInfo->tag == GF_ODF_GEN_SUB_CFG_TAG) {
-			cfg = (GF_GenericSubtitleConfig *) import->esd->decoderConfig->decoderSpecificInfo;
-			import->esd->decoderConfig->decoderSpecificInfo = NULL;
+			cfg	= (GF_GenericSubtitleConfig	*) import->esd->decoderConfig->decoderSpecificInfo;
+			import->esd->decoderConfig->decoderSpecificInfo	= NULL;
 		}
 		ID = import->esd->ESID;
-		OCR_ES_ID = import->esd->OCRESID;
+		OCR_ES_ID =	import->esd->OCRESID;
 	} else {
-		timescale = 1000;
-		OCR_ES_ID = ID = 0;
+		timescale =	1000;
+		OCR_ES_ID =	ID = 0;
 	}
 	
-	if (cfg && cfg->timescale) timescale = cfg->timescale;
-	track = gf_isom_new_track(import->dest, ID, GF_ISOM_MEDIA_TEXT, timescale);
-	if (!track) {
+	if (cfg	&& cfg->timescale) timescale = cfg->timescale;
+	track =	gf_isom_new_track(import->dest,	ID,	GF_ISOM_MEDIA_TEXT,	timescale);
+	if (!track)	{
 		return gf_import_message(import, gf_isom_last_error(import->dest), "Error creating WebVTT track");
 	}
-	gf_isom_set_track_enabled(import->dest, track, 1);
-	if (import->esd && !import->esd->ESID) import->esd->ESID = gf_isom_get_track_id(import->dest, track);
+	gf_isom_set_track_enabled(import->dest,	track, 1);
+	if (import->esd	&& !import->esd->ESID) import->esd->ESID = gf_isom_get_track_id(import->dest, track);
 
-	if (OCR_ES_ID) gf_isom_set_track_reference(import->dest, track, GF_ISOM_REF_OCR, OCR_ES_ID);
+	if (OCR_ES_ID) gf_isom_set_track_reference(import->dest, track,	GF_ISOM_REF_OCR, OCR_ES_ID);
 
-	/*setup track*/
+	/*setup	track*/
 	if (cfg) {
-        u32 i;
-        u32 count;
-        u32 index = 0;
-		/*set track info*/
-		gf_isom_set_track_layout_info(import->dest, track, cfg->text_width<<16, cfg->text_height<<16, 0, 0, cfg->layer);
+		u32	i;
+		u32	count;
+		/*set track	info*/
+		gf_isom_set_track_layout_info(import->dest,	track, cfg->text_width<<16,	cfg->text_height<<16, 0, 0,	cfg->layer);
 
 		/*and set sample descriptions*/
-		count = gf_list_count(cfg->sample_descriptions);
-		for (i=0; i<count; i++) {
-//			GF_GenericSubtitleSampleDescriptor *sd= (GF_GenericSubtitleSampleDescriptor *)gf_list_get(cfg->sample_descriptions, i);
-			gf_isom_new_generic_subtitle_description(import->dest, track, content_encoding, xml_schema_loc, mime_ns, is_xml, NULL, NULL, &index);
+		count =	gf_list_count(cfg->sample_descriptions);
+		for	(i=0; i<count; i++)	{
+			GF_GenericSubtitleSampleDescriptor *sd=	(GF_GenericSubtitleSampleDescriptor	*)gf_list_get(cfg->sample_descriptions,	i);
+			gf_isom_new_webvtt_description(import->dest, track, NULL, NULL, NULL, &descIndex);
 		}
-		gf_import_message(import, GF_OK, "WebVTT import - text track %d x %d", cfg->text_width, cfg->text_height);
+		gf_import_message(import, GF_OK, "WebVTT import	- text track %d	x %d", cfg->text_width,	cfg->text_height);
 		gf_odf_desc_del((GF_Descriptor *)cfg);
 	} else {
-        u32 index = 0;
-		u32 w;
-        u32 h;
+		u32	w;
+		u32	h;
 
-        gf_text_get_video_size(import, &w, &h);
-		gf_isom_set_track_layout_info(import->dest, track, w<<16, h<<16, 0, 0, 0);
+		gf_text_get_video_size(import, &w, &h);
+		gf_isom_set_track_layout_info(import->dest,	track, w<<16, h<<16, 0,	0, 0);
 
-        gf_isom_new_generic_subtitle_description(import->dest, track, content_encoding, xml_schema_loc, mime_ns, is_xml, NULL, NULL, &index);
+		gf_isom_new_webvtt_description(import->dest, track,	NULL, NULL,	NULL, &descIndex);
 		
-        gf_import_message(import, GF_OK, "WebVTT import");
+		gf_import_message(import, GF_OK, "WebVTT import");
 	}
-	gf_text_import_set_language(import, track);
-	duration = (u32) (((Double) import->duration)*timescale/1000.0);
+	gf_text_import_set_language(import,	track);
+	duration = (u32) (((Double)	import->duration)*timescale/1000.0);
 
-    vttparser = gf_webvtt_parser_new();
-    flusher.import = import;
-    flusher.timescale = timescale;
-    flusher.track = track;
-    e = gf_webvtt_parser_init(vttparser, import->in_name, &flusher, gf_webvtt_import_report, gf_webvtt_flush_sample_to_iso);
-    if (e != GF_OK) {
-        gf_webvtt_parser_del(vttparser);
-        return gf_import_message(import, GF_NOT_SUPPORTED, "Unsupported WebVTT UTF encoding");
-    }
-    e = gf_webvtt_parser_parse(vttparser, duration);
-    if (e != GF_OK) {
-        gf_isom_remove_track(import->dest, track);
-    }
-    /*do not add any empty sample at the end since it modifies track duration and is not needed - it is the player job
-    to figure out when to stop displaying the last text sample
-    However update the last sample duration*/
-    gf_isom_set_last_sample_duration(import->dest, track, (u32) gf_webvtt_parser_last_duration(vttparser));
-    gf_webvtt_parser_del(vttparser);
-    return e;
+	vttparser =	gf_webvtt_parser_new();
+	flusher.import              = import;
+	flusher.timescale           = timescale;
+	flusher.track               = track;
+	flusher.descriptionIndex    = descIndex;
+	e =	gf_webvtt_parser_init(vttparser, import->in_name, &flusher,
+                              gf_webvtt_import_report, gf_webvtt_flush_sample_to_iso, gf_webvtt_import_header);
+	if (e != GF_OK) {
+		gf_webvtt_parser_del(vttparser);
+		return gf_import_message(import, GF_NOT_SUPPORTED, "Unsupported	WebVTT UTF encoding");
+	}
+	e =	gf_webvtt_parser_parse(vttparser, duration);
+	if (e != GF_OK)	{
+		gf_isom_remove_track(import->dest, track);
+	}
+	/*do not add any empty sample at the end since it modifies track duration and is not needed	- it is	the	player job
+	to figure out when to stop displaying the last text	sample
+	However	update the last	sample duration*/
+	gf_isom_set_last_sample_duration(import->dest, track, (u32)	gf_webvtt_parser_last_duration(vttparser));
+	gf_webvtt_parser_del(vttparser);
+	return e;
 }
 
 static GF_Err gf_text_import_sub(GF_MediaImporter *import)
