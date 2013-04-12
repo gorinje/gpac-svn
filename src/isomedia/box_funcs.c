@@ -639,8 +639,8 @@ GF_Box *gf_isom_box_new(u32 boxType)
 	case GF_ISOM_BOX_TYPE_VTTC: return boxstring_New(GF_ISOM_BOX_TYPE_VTTC);
 	case GF_ISOM_BOX_TYPE_CTIM: return boxstring_New(GF_ISOM_BOX_TYPE_CTIM);
 	case GF_ISOM_BOX_TYPE_IDEN: return boxstring_New(GF_ISOM_BOX_TYPE_IDEN);
-	case GF_ISOM_BOX_TYPE_STTG: return boxstring_New(GF_ISOM_BOX_TYPE_IDEN);
-	case GF_ISOM_BOX_TYPE_PAYL: return boxstring_New(GF_ISOM_BOX_TYPE_IDEN);
+	case GF_ISOM_BOX_TYPE_STTG: return boxstring_New(GF_ISOM_BOX_TYPE_STTG);
+	case GF_ISOM_BOX_TYPE_PAYL: return boxstring_New(GF_ISOM_BOX_TYPE_PAYL);
 	case GF_ISOM_BOX_TYPE_WVTT: return wvtt_New();
 
 	default:

@@ -646,6 +646,7 @@ GF_Err gf_media_export_native(GF_MediaExporter *dumper)
 	char *dsi;
 	QCPRateTable rtable[8];
 	Bool is_stdout=0;
+    Bool is_webvtt = GF_FALSE;
 
 	dsi_size = 0;
 	dsi = NULL;
@@ -889,6 +890,11 @@ GF_Err gf_media_export_native(GF_MediaExporter *dumper)
 			gf_export_message(dumper, GF_OK, "Extracting AC3 Audio");
 			if (add_ext) 
 				strcat(szName, ".ac3");
+		} else if (m_stype==GF_ISOM_SUBTYPE_WVTT) {
+			gf_export_message(dumper, GF_OK, "Extracting WebVTT");
+            is_webvtt = GF_TRUE;
+			if (add_ext) 
+				strcat(szName, ".vtt");
 		} else {
 			if (add_ext) {
 				strcat(szName, ".");
@@ -923,7 +929,12 @@ GF_Err gf_media_export_native(GF_MediaExporter *dumper)
 
 	if (is_vobsub) return gf_dump_to_vobsub(dumper, szName, track, dsi, dsi_size);
 
-	if (qcp_type>1) {
+	if (is_webvtt) {
+        GF_Err gf_webvtt_dump_iso_track(GF_MediaExporter *dumper, char *szName, u32 track);
+        return gf_webvtt_dump_iso_track(dumper, szName, track);
+    }
+
+    if (qcp_type>1) {
 		if (dumper->flags & GF_EXPORT_USE_QCP) {
 			if (add_ext) 
 				strcat(szName, ".qcp");
@@ -1235,7 +1246,7 @@ GF_Err gf_media_export_native(GF_MediaExporter *dumper)
 				}
 			}
 		}
-		if (!avccfg && !svccfg && !hevccfg) gf_bs_write_data(bs, samp->data, samp->dataLength);
+		if (!avccfg && !svccfg && !hevccfg &!is_webvtt) gf_bs_write_data(bs, samp->data, samp->dataLength);
 		gf_isom_sample_del(&samp);
 		gf_set_progress("Media Export", i+1, count);
 		if (dumper->flags & GF_EXPORT_DO_ABORT) break;

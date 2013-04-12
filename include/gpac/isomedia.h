@@ -199,6 +199,7 @@ enum
 	GF_ISOM_SUBTYPE_AC3			= GF_4CC( 'a', 'c', '-', '3' ),
 
 	GF_ISOM_SUBTYPE_LSR1		= GF_4CC( 'l', 's', 'r', '1' ),
+	GF_ISOM_SUBTYPE_WVTT		= GF_4CC( 'w', 'v', 't', 't' ),
 };
 
 
