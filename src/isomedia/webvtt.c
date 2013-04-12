@@ -27,6 +27,8 @@
 #include <gpac/internal/media_dev.h>
 #include <gpac/constants.h>
 
+#ifndef GPAC_DISABLE_VTT
+
 /* WebVTT types */
 typedef enum {
     WEBVTT_ID,
@@ -1273,3 +1275,4 @@ exit:
     return e;
 }
 
+#endif /* GPAC_DISABLE_VTT */

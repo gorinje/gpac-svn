@@ -3390,6 +3390,7 @@ GF_Err blnk_Size(GF_Box *s);
 GF_Err twrp_Size(GF_Box *s);
 #endif
 
+#ifndef GPAC_DISABLE_VTT
 /*WebVTT boxes*/
 GF_Box *boxstring_New(u32 type);
 GF_Box *vtcu_New();
@@ -3416,7 +3417,7 @@ GF_Err boxstring_Size(GF_Box *s);
 GF_Err vtcu_Size(GF_Box *s);
 GF_Err vtte_Size(GF_Box *s);
 GF_Err wvtt_Size(GF_Box *s);
-#endif
+#endif /* GPAC_DISABLE_ISOM_WRITE */
 
 GF_Err boxstring_dump(GF_Box *a, FILE * trace);
 GF_Err vtcu_dump(GF_Box *a, FILE * trace);
@@ -3425,6 +3426,8 @@ GF_Err wvtt_dump(GF_Box *a, FILE * trace);
 
 GF_Err gf_isom_update_webvtt_description(GF_ISOFile *movie, u32 trackNumber, u32 descriptionIndex, const char *config);
 GF_ISOSample *gf_isom_webvtt_to_sample(void *samp);
+
+#endif /* GPAC_DISABLE_VTT */
 
 /* MPEG-21 functions */
 GF_Box *meta_New();
